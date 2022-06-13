@@ -1,12 +1,16 @@
+#!/usr/bin/env python3
 import boto3
-import argparse
-import botocore.exceptions
-from rich import box
-from rich.table import Table
 import logging
+import argparse
+from sys import argv
+from rich import box
+import botocore.exceptions
+from rich.table import Table
+from rich.pretty import pprint
 from rich.console import Console
 
-Print = Console(style="green")
+Info = Console(style="green")
+Result = Console(style="blue")
 Error = Console(style="bold red")
 
 # Better exception? (put invalid creds to test and see the error)
@@ -23,65 +27,121 @@ def GetCreds():
 
 
 def CreateInstance(arg):
+    # 1- List pending instances
+    # 2- Live block to watch instances as they are running
     instance_type = arg.type
     instance_id = arg.id
     instances_count = arg.max
-    instance_initscript = arg.initscript
-    Print.print("[+] Launching instances")
+    if arg.initscript:
+        with open(arg.initscript, "r") as f:
+            instance_userdata = f.read().strip()
+            f.close()
+    else:
+        instance_userdata = '''nothing'''
+    Info.print("[+] Launching instances")
     Ec2 = session.resource('ec2')
     instances = Ec2.create_instances(InstanceType=instance_type,
                                      MinCount=1,
                                      MaxCount=instances_count,
-                                     ImageId=instance_id)
-    # UserData=instance_initscript)
+                                     ImageId=instance_id,
+                                     UserData=instance_userdata)
     for instance in instances:
-        Print.print(f"[+] launched {instance}")
+        Info.print(f"[+] launched {instance}")
+
+
+def StopInstaces():
+    # Here we can use a list of ids=["", ""]
+    # This function is to use later
+    ids = []
+    Ec2 = session.resource('ec2')
+    Ec2.instances.filter(InstanceIds=ids).stop()
+
+
+def RunInstances():
+    # Here we can use a list of ids=["", ""]
+    # This function is to use later
+    ids = []
+    Ec2 = session.resource('ec2')
+    Ec2.instances.filter(InstanceIds=ids).run()
 
 
 def TerminateInstances(arg):
     instance_id = arg.id
-    Ec2 = session.client('ec2')
-    if instance_id.lower() != "all":
-        Print.print(f"[+] Terminating {instance_id}")
-        response = Ec2.terminate_instances(InstanceIds=[instance_id])
-        Error.print(f"[!] Terminated: {instance_id}")
-        Print.print(response)
-    elif instance_id.lower() == 'all':
-        Print.print("[+] Terminating all instances")
-        getinstaces = Ec2.describe_instances(
-            Filters=[{'Name': 'instance-state-name', 'Values': ['running']}])
-        for n, instance in enumerate(getinstaces['Reservations']):
-            inst = getinstaces['Reservations'][n]['Instances'][0]['InstanceId']
-            Error.print(f"[!] Terminated: {inst}")
-            response = Ec2.terminate_instances(InstanceIds=[inst])
-            Print.print(response)
-
-
-def DescribeInstaces(arg, msg="[+] Listing.."):
-    instance_status = arg.status
-    Print.print(msg)
-    response = session.client('ec2')
-    getinstaces = response.describe_instances(Filters=[{'Name': 'instance-state-name', 'Values': [instance_status]}])
-    table = Table(box=box.ASCII)
-    table.add_column("PublicDnsName", style="cyan", no_wrap=True)
-    table.add_column("InstanceId", style="magenta", no_wrap=True)
-    table.add_column("InstanceType", style="magenta", no_wrap=True)
-    table.add_column("LaunchTime", style="magenta", no_wrap=True)
+    Ec2 = session.resource('ec2')
     try:
-        for n, instance in enumerate(getinstaces['Reservations']):  # InstanceType
-            table.add_row(instance['Instances'][0]['PublicDnsName'],
-                          instance['Instances'][0]['InstanceId'],
-                          instance['Instances'][0]['InstanceType'],
-                          str(instance['Instances'][0]['LaunchTime']))
+        if instance_id[0].lower() != "all":
+            Info.print(f"[+] Terminating {instance_id}")
+            Ec2.instances.filter(InstanceIds=instance_id).terminate()
+            Result.print("[+] Terminated Successfully !")
+            Info.print("[+] Listing currently running instances")
+            getinstances = Ec2.instances.filter(Filters=[{'Name': 'instance-state-name', 'Values': ["running"]}])
+            table = Table(box=box.ASCII)
+            table.add_column("InstanceId", style="green", no_wrap=True, justify="center")
+            table.add_column("PublicDnsName", style="bold cyan", no_wrap=True, justify="center")
+            table.add_column("InstanceType", style="magenta", no_wrap=True, justify="center")
+            table.add_column("LaunchTime", style="magenta", no_wrap=True, justify="center")
+            for instance in getinstances:  # InstanceType
+                table.add_row(instance.public_ip_address,
+                              instance.id,
+                              instance.instance_type,
+                              str(instance.launch_time))
+            Result.print(table)
+        elif instance_id[0].lower() == 'all':
+            Info.print("[+] Terminating all instances")
+            instances = Ec2.instances.filter(Filters=[{'Name': 'instance-state-name', 'Values': ["running"]}])
+            ids = [instance.id for instance in instances]
+            Ec2.instances.filter(InstanceIds=ids).terminate()
+            Result.print("[+] Terminated Successfully !")
+            Info.print("[+] Listing instances")
+            getinstances = Ec2.instances.filter(Filters=[{'Name': 'instance-state-name', 'Values': ["shutting-down"]}])
+            table = Table(box=box.ASCII)
+            table.add_column("InstanceId", style="green", no_wrap=True, justify="center")
+            table.add_column("PublicDnsName", style="bold cyan", no_wrap=True, justify="center")
+            table.add_column("InstanceType", style="magenta", no_wrap=True, justify="center")
+            table.add_column("LaunchTime", style="magenta", no_wrap=True, justify="center")
+            table.add_column("State", style="red", no_wrap=True, justify="center")
+            try:
+                for instance in getinstances:  # InstanceType
+                    table.add_row(instance.public_ip_address,
+                                  instance.id,
+                                  instance.instance_type,
+                                  str(instance.launch_time),
+                                  instance.state["Name"])
+            except KeyError:
+                Error.print_exception()
+            Result.print(table)
+    except botocore.exceptions.ClientError:
+        Error.print(f"[!] Usage: {argv[0]} terminate -h/--help")
+        exit(1)
+
+
+def DescribeInstaces(arg):
+    # ADD all and make this function suitable to overuse rather than reusing the same code again and again!
+    instance_status = arg.state
+    msg = f"[+] Listing {arg.state} instances"
+    Info.print(msg)
+    Ec2 = session.resource('ec2')
+    getinstances = Ec2.instances.filter(Filters=[{'Name': 'instance-state-name', 'Values': [instance_status]}])
+    table = Table(box=box.ASCII)
+    table.add_column("InstanceId", style="green", no_wrap=True, justify="center")
+    table.add_column("PublicDnsName", style="bold cyan", no_wrap=True, justify="center")
+    table.add_column("InstanceType", style="magenta", no_wrap=True, justify="center")
+    table.add_column("LaunchTime", style="magenta", no_wrap=True, justify="center")
+    try:
+        for instance in getinstances:  # InstanceType
+            table.add_row(instance.public_ip_address,
+                          instance.id,
+                          instance.instance_type,
+                          str(instance.launch_time))
     except KeyError:
         Error.print_exception()
-    Print.print(table)
+    Info.print(table)
     # print(getinstaces['Reservations'][1]['Instances'][0]['PublicDnsName'])
 
 
 def DescribeImages(arg):
     instance_os = arg.os
-    Print.print("[+] Listing Images")
+    Info.print("[+] Listing Images")
     Ec2 = session.client('ec2')
     Instances = Ec2.describe_images(
         ExecutableUsers=['all'],
@@ -90,7 +150,7 @@ def DescribeImages(arg):
                 'Name': 'name',
                 'Values': ['ubuntu/images/hvm-ssd/ubuntu-*']
             }])
-    table = Table(title="AMI Instances")
+    table = Table(box=box.ASCII)
     table.add_column("ImageId", style="cyan", no_wrap=True)
     table.add_column("Description", style="magenta", no_wrap=True)
     try:
@@ -98,7 +158,7 @@ def DescribeImages(arg):
             table.add_row(Instances['Images'][n]['ImageId'], Instances['Images'][n]['Description'])
     except KeyError:
         table.add_row(Instances['Images'][n]['ImageId'], "[bold red]No Description[/bold red]")
-    Print.print(table)
+    Info.print(table)
 
 
 def SecurityGroups():
@@ -110,7 +170,7 @@ def CreateSecurityKey():
 
 
 def banner():
-    Print.print("""[blue]
+    Info.print("""[blue]
           ██████   ██                       ██
          ██░░░░██ ░██                      ░██  ██   ██
  ██████ ██    ░░  ░██  ██████  ██   ██     ░██ ░░██ ██
@@ -120,7 +180,7 @@ def banner():
  ██████ ░░██████  ███░░██████ ░░██████░░██████  ██
 ░░░░░░   ░░░░░░  ░░░  ░░░░░░   ░░░░░░  ░░░░░░  ░░[/blue]
 
- [white]☁[/white][green]zCloudy[/green] [red]|[/red] [red]Creator:[/red] [green]zAbuQasem[/green]
+ [white]☁[/white] [green]zCloudy[/green] [red]|[/red] [red]Creator:[/red] [green]zAbuQasem[/green]
 
 """)
 
@@ -142,20 +202,29 @@ if __name__ == '__main__':
         create_parser.add_argument('-s', '--initscript', help='A script to run when the instance is initiated')
         create_parser.set_defaults(func=CreateInstance)
         """List Options"""
-        list_parser.add_argument("-s", "--state", help="list instances based on it's state",
-                                 choices=["running", "pending", "terminated", "rebooting"], required=True)
+        list_parser.add_argument("-s", "--state",
+                                 help="list instances based on it's state (all: to list all instances)", required=True)
         list_parser.set_defaults(func=DescribeInstaces)
         """Describe Options"""
         describe_parser.add_argument('-o', '--os', help='Operating system ex: ubuntu')
         describe_parser.set_defaults(func=DescribeImages)
         """Terminate Options"""
         terminate_parser.add_argument('-i', '--id',
+                                      nargs='*',
                                       help='Instance AMI-Id you want to terminate (all: to terminate all instances)')
         terminate_parser.set_defaults(func=TerminateInstances)
         """End of argparse"""
         args = parser.parse_args()
-        args.func(args)
+        try:
+            args.func(args)
+        except AttributeError:
+            # Error.print(f"[!] Help: [blue]{argv[0]} -h[/blue]")
+            Error.print_exception()
+            exit(1)
     except Exception:
         Error.print_exception()
 
 # Generator for displaying tables?
+# info -> green
+# results -> blue
+# errors -> red
