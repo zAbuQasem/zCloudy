@@ -32,6 +32,7 @@ def CreateInstance(arg):
     instance_type = arg.type
     instance_id = arg.id
     instances_count = arg.max
+    instance_name = arg.name
     if arg.initscript:
         with open(arg.initscript, "r") as f:
             instance_userdata = f.read().strip()
@@ -44,7 +45,20 @@ def CreateInstance(arg):
                                      MinCount=1,
                                      MaxCount=instances_count,
                                      ImageId=instance_id,
-                                     UserData=instance_userdata)
+                                     UserData=instance_userdata,
+                                     TagSpecifications=[
+                                         {
+                                             'ResourceType': 'instance',
+                                             'Tags': [
+                                                 {
+                                                     'Key': 'Name',
+                                                     'Value': f'{instance_name}'
+                                                 },
+                                             ]
+                                         },
+                                     ],
+
+                                     )
     for instance in instances:
         Info.print(f"[+] launched {instance}")
 
@@ -200,6 +214,7 @@ if __name__ == '__main__':
         create_parser.add_argument('-i', '--id', help='Specify AMI-Id (Instance ID)', required=True)
         create_parser.add_argument('-m', '--max', help='Max number of instances', type=int, default="1")
         create_parser.add_argument('-s', '--initscript', help='A script to run when the instance is initiated')
+        create_parser.add_argument('-n', '--name', help='Instance name (All instances will have this name!)')
         create_parser.set_defaults(func=CreateInstance)
         """List Options"""
         list_parser.add_argument("-s", "--state",
@@ -224,7 +239,17 @@ if __name__ == '__main__':
     except Exception:
         Error.print_exception()
 
-# Generator for displaying tables?
-# info -> green
-# results -> blue
-# errors -> red
+"""
+Info -> green
+Results -> blue
+Errors -> red
+"""
+
+"""
+CORE:
+    - Create, List, Terminate, Describe (manage.py)
+    - AWS Creds encryption (secret.py)
+    - Connect to a specific instance (connect.py)
+    - configuration (config.yml) # OR similar
+    - Send commands (send.py)
+"""
