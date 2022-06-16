@@ -27,6 +27,7 @@ def GetCreds():
     pass
 
 
+# Remove the hardcoded keyname
 def CreateInstance(arg):
     # 1- List pending instances
     # 2- Live block to watch instances as they are running
@@ -47,6 +48,7 @@ def CreateInstance(arg):
                                      MaxCount=instances_count,
                                      ImageId=instance_id,
                                      UserData=instance_userdata,
+                                     KeyName=CreateSecurityKey(),
                                      TagSpecifications=[
                                          {
                                              'ResourceType': 'instance',
@@ -192,7 +194,13 @@ def SecurityGroups():
 
 
 def CreateSecurityKey():
-    pass
+    keypair_name = "zCloudy"
+    ec2 = session.client('ec2')
+    keypair = ec2.create_key_pair(KeyName=keypair_name)
+    private_key_file = open(keypair_name, "w")
+    private_key_file.write(keypair["KeyMaterial"])
+    private_key_file.close()
+    return keypair["KeyMaterial"]
 
 
 """ Manage ec2 instances
@@ -203,4 +211,14 @@ def CreateSecurityKey():
                 run echo hello (all instances)
                 
 /** paramiko
+"""
+
+
+"""
+CreateInstances:
+    - Exception is thrown if the keypair is already available
+    
+CreateSecurityKey:
+    - Remove the hardcoded name (or leave it)
+    - Check whether the key is there or not else download the keyf
 """
