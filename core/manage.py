@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import time
+
 import boto3
 import logging
 import argparse
@@ -48,7 +50,7 @@ def CreateInstance(arg):
                                      MaxCount=instances_count,
                                      ImageId=instance_id,
                                      UserData=instance_userdata,
-                                     KeyName=CreateSecurityKey(),
+                                     # KeyName=CreateSecurityKey(),
                                      TagSpecifications=[
                                          {
                                              'ResourceType': 'instance',
@@ -62,6 +64,8 @@ def CreateInstance(arg):
                                      ],
 
                                      )
+    """To ensure the public ips is initialized (remove after implementing wait group)"""
+    time.sleep(2)
     getinstances = Ec2.instances.filter(Filters=[{'Name': 'instance-state-name', 'Values': ["pending"]}])
     table = Table(box=box.ASCII)
     table.add_column("InstanceId", style="white", no_wrap=True, justify="center")
@@ -78,20 +82,24 @@ def CreateInstance(arg):
     Result.print(table)
 
 
-def StopInstaces():
-    # Here we can use a list of ids=["", ""]
+def StartInstances(arg):
+    # Here we can use a list of ids=["", ""] (accepts only lists)
     # This function is to use later
-    ids = []
+    ids = arg.id
     Ec2 = session.resource('ec2')
+    Info.print(f"[+] Starting instance: {ids[0]}")
+    Ec2.instances.filter(InstanceIds=ids).start()
+    Result.print("[+] Done")
+
+
+def StopInstaces(arg):
+    # Here we can use a list of ids=["", ""] (accepts only lists)
+    # This function is to use later
+    ids = arg.id
+    Ec2 = session.resource('ec2')
+    Info.print(f"[+] Stopping instance: {ids[0]}")
     Ec2.instances.filter(InstanceIds=ids).stop()
-
-
-def RunInstances():
-    # Here we can use a list of ids=["", ""]
-    # This function is to use later
-    ids = []
-    Ec2 = session.resource('ec2')
-    Ec2.instances.filter(InstanceIds=ids).run()
+    Result.print("[+] Done")
 
 
 def TerminateInstances(arg):
@@ -101,7 +109,7 @@ def TerminateInstances(arg):
         if instance_id[0].lower() != "all":
             Info.print(f"[+] Terminating {instance_id}")
             Ec2.instances.filter(InstanceIds=instance_id).terminate()
-            Result.print("[+] Terminated Successfully !")
+            # Result.print("[+] Terminated Successfully !")
             Info.print("[+] Listing currently running instances")
             getinstances = Ec2.instances.filter(Filters=[{'Name': 'instance-state-name', 'Values': ["running"]}])
             table = Table(box=box.ASCII)
@@ -120,7 +128,7 @@ def TerminateInstances(arg):
             instances = Ec2.instances.filter(Filters=[{'Name': 'instance-state-name', 'Values': ["running"]}])
             ids = [instance.id for instance in instances]
             Ec2.instances.filter(InstanceIds=ids).terminate()
-            Result.print("[+] Terminated Successfully !")
+            # Result.print("[+] Terminated Successfully !")
             Info.print("[+] Listing instances")
             getinstances = Ec2.instances.filter(Filters=[{'Name': 'instance-state-name', 'Values': ["shutting-down"]}])
             table = Table(box=box.ASCII)
@@ -164,7 +172,7 @@ def DescribeInstaces(arg):
                           str(instance.launch_time))
     except KeyError:
         Error.print_exception()
-    Info.print(table)
+    Result.print(table)
 
 
 def DescribeImages(arg):
@@ -212,7 +220,6 @@ def CreateSecurityKey():
                 
 /** paramiko
 """
-
 
 """
 CreateInstances:

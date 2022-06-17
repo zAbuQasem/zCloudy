@@ -1,3 +1,7 @@
+"""This is for testing purposes only!
+This will be cmd.py in the future
+"""
+
 import paramiko
 import manage
 
