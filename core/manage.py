@@ -81,6 +81,8 @@ def CreateInstance(arg):
                       instance.state["Name"])
     Result.print(table)
 
+def CheckSecurityKeys():
+    pass
 
 def StartInstances(arg):
     # Here we can use a list of ids=["", ""] (accepts only lists)
@@ -225,7 +227,7 @@ def CreateSecurityKey():
 CreateInstances:
     - Exception is thrown if the keypair is already available
     
-CreateSecurityKey:
+CreateSecurityKey: (CheckFunction)
     - Remove the hardcoded name (or leave it)
-    - Check whether the key is there or not else download the keyf
+    - Check whether the key is there or not else download the key
 """
