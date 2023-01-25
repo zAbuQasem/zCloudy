@@ -120,7 +120,7 @@ def banner():
  ██████ ░░██████  ███░░██████ ░░██████░░██████  ██
 ░░░░░░   ░░░░░░  ░░░  ░░░░░░   ░░░░░░  ░░░░░░  ░░[/blue]
 
- [white]☁[/white][green]zCloudy[/green] [red]|[/red] [red]Creator:[/red] [green]zAbuQasem[/green]
+ [white]☁[/white][green]  zCloudy[/green] [red]|[/red] [red]Creator:[/red] [green]zAbuQasem[/green]
 
 """)
 
